@@ -1,77 +1,82 @@
 import os
+import json
 from document_reader import DocumentReader
 from web_scraper import WebScraper
 from ai_extractor import AIGovernanceExtractor
+from database import MongoRepository
 
-def run_data_pipeline():
-    """Main execution loop to process manifestos and web announcements using AI."""
-    
-    # Fetch the API key from environment variables
+def run_pipeline():
     api_key = os.environ.get("GEMINI_API_KEY") 
-    
     if not api_key:
-        print("Please set your GEMINI_API_KEY environment variable.")
-        # For testing, you can uncomment the line below and add your key:
-        # api_key = "YOUR_ACTUAL_API_KEY"
+        print("❌ Error: Set GEMINI_API_KEY environment variable.")
         return
 
-    # Initialize our single-responsibility classes
-    doc_reader = DocumentReader()
-    web_scraper = WebScraper()
+    reader = DocumentReader()
+    scraper = WebScraper()
     extractor = AIGovernanceExtractor(api_key=api_key)
+    db_repo = MongoRepository() 
 
-    # ==========================================
-    # PHASE 1: PARSE LOCAL PDF MANIFESTOS
-    # ==========================================
+    # --- PHASE 1: PROCESSING MANIFESTOS (WITH CHUNKING) ---
     print("\n--- PHASE 1: PROCESSING MANIFESTOS ---")
-    manifestos_to_process = [
-        {"file": "manifesto-2024.pdf", "party": "BJP", "year": 2024},
-        {"file": "manifesto-2019.pdf", "party": "BJP", "year": 2019},
+    manifestos = [
         {"file": "manifesto-2014.pdf", "party": "BJP", "year": 2014}
     ]
-
-    for doc in manifestos_to_process:
-        file_path = doc["file"]
-        print(f"Reading PDF: {file_path}")
-        raw_text = doc_reader.extract_text_from_pdf(file_path)
-        
-        if raw_text:
-            print(f"Extracting {doc['year']} data via AI...")
-            json_result = extractor.extract_manifesto_data(
-                raw_text=raw_text, party=doc["party"], year=doc["year"], source=file_path
-            )
-            
-            output_filename = f"{doc['party']}_{doc['year']}_manifesto.json"
-            with open(output_filename, 'w', encoding='utf-8') as f:
-                f.write(json_result)
-            print(f"Saved -> {output_filename}")
-
-
-   # ==========================================
-    # PHASE 2: DYNAMICALLY SCRAPE WEB ANNOUNCEMENTS
-    # ==========================================
-    print("\n--- PHASE 2: PROCESSING WEB ANNOUNCEMENTS ---")
     
-    # Dynamically fetch the 3 most recent announcements
-    print("Fetching the latest press release links directly from PIB...")
-    announcements_to_process = web_scraper.get_latest_pib_links(limit=3)
+    # Chunking Configuration
+    CHUNKS_SIZE = 25000  # Number of characters per AI request
+    OVERLAP = 2000       # Overlap to ensure no promise is cut in half
 
-    if not announcements_to_process:
-        print("No links found. Check your internet connection.")
-
-    for index, url in enumerate(announcements_to_process):
-        print(f"\nScraping URL: {url}")
-        raw_text = web_scraper.fetch_article_text(url)
+    for doc in manifestos:
+        print(f"Reading {doc['file']}...")
+        full_text = reader.extract_text_from_pdf(doc["file"])
         
-        if raw_text:
-            print("Extracting announcement data via AI...")
-            json_result = extractor.extract_announcement_data(
-                raw_text=raw_text, source_url=url
-            )
+        if full_text:
+            text_length = len(full_text)
+            print(f"Total Text Length: {text_length} characters. Starting chunked extraction...")
             
-            output_filename = f"dynamic_announcement_{index + 1}.json"
-            with open(output_filename, 'w', encoding='utf-8') as f:
-                f.write(json_result)
-            print(f"Saved -> {output_filename}")
+            start = 0
+            chunk_count = 1
+            
+            while start < text_length:
+                end = start + CHUNKS_SIZE
+                chunk = full_text[start:end]
+                
+                print(f"Processing Chunk {chunk_count} (Chars {start} to {min(end, text_length)})...")
+                
+                # Send the specific chunk to the AI
+                result = extractor.extract_manifesto_data(
+                    chunk, 
+                    doc["party"], 
+                    doc["year"], 
+                    f"{doc['file']} (Part {chunk_count})"
+                )
+                
+                # Store the results of this chunk in MongoDB
+                db_repo.store_manifesto(result)
+                
+                # Move to next chunk with overlap
+                start += (CHUNKS_SIZE - OVERLAP)
+                chunk_count += 1
         else:
-            print(f"Failed to scrape or empty content for: {url}")
+            print(f"Skipping {doc['file']} - No text extracted.")
+
+    # --- PHASE 2: PROCESSING LIVE ANNOUNCEMENTS ---
+    print("\n--- PHASE 2: PROCESSING LIVE ANNOUNCEMENTS ---")
+    links = scraper.get_latest_pib_links()
+    for url in links:
+        print(f"Scraping {url}...")
+        text = scraper.fetch_article_text(url)
+        if text:
+            result = extractor.extract_announcement_data(text, url)
+            db_repo.store_announcement(result)
+
+    # --- PHASE 3: PROCESSING LEGISLATIVE DOCUMENTS ---
+    print("\n--- PHASE 3: PROCESSING LEGISLATIVE DOCUMENTS ---")
+    dummy_bill_text = "The Digital Personal Data Protection Bill, 2023 summary..."
+    result = extractor.extract_legislative_data(dummy_bill_text, "https://sansad.in/bills")
+    db_repo.store_legislative_document(result)
+
+    print("\n✅ Pipeline Complete! Data is fully structured in MongoDB.")
+
+if __name__ == "__main__":
+    run_pipeline()
