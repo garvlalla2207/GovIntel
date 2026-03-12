@@ -6,7 +6,8 @@ import {
     Clock,
     Loader2,
     Bot,
-    X
+    X,
+    ExternalLink
 } from 'lucide-react';
 import StatCard from '../components/ui/StatCard';
 import ReactMarkdown from 'react-markdown';
@@ -51,6 +52,36 @@ export default function Dashboard() {
         } finally {
             setIsGenerating(false);
         }
+    };
+
+    const [priorityItems, setPriorityItems] = useState([]); // NEW STATE
+    const [loadingPriority, setLoadingPriority] = useState(true);
+
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            try {
+                // Fetch Top Stats
+                const statsRes = await api.get('/dashboard/stats');
+                if (statsRes.success) setStats(statsRes.data);
+
+                // Fetch High Priority List
+                const priorityRes = await api.get('/dashboard/high-priority');
+                if (priorityRes.success) setPriorityItems(priorityRes.data);
+
+            } catch (error) {
+                console.error("Failed to fetch dashboard data", error);
+            } finally {
+                setLoading(false);
+                setLoadingPriority(false);
+            }
+        };
+        fetchDashboardData();
+    }, []);
+
+    const getLevelStyles = (level) => {
+        if (level === "Advanced") return { color: "text-[#6A9A6B]", bg: "bg-[#6A9A6B]" };
+        if (level === "In Progress") return { color: "text-[#143B5A]", bg: "bg-[#143B5A]" };
+        return { color: "text-[#C55650]", bg: "bg-[#C55650]" }; // Stalled
     };
 
     return (
@@ -153,49 +184,65 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* 3. Promise Implementation (Takes up 2 columns) */}
-                <div className="lg:col-span-2 bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
-                    <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
-                        <h2 className="text-xl font-bold text-[#00507A] flex items-center gap-2">
+                <div className="lg:col-span-2 bg-white border border-gray-100 rounded-[28px] p-6 sm:p-8 shadow-sm">
+                    <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-5">
+                        <h2 className="text-xl font-bold text-[#143B5A] flex items-center gap-2">
                             <Activity size={20} className="text-[#966B9D]" /> High-Priority Implementations
                         </h2>
-                        <button className="text-sm font-medium text-[#00507A] hover:text-[#966B9D] transition-colors flex items-center gap-1">
-                            View All <ArrowRight size={16} />
-                        </button>
                     </div>
 
-                    <div className="space-y-4">
-                        {[
-                            { text: "Universal Broadband Access", progress: 85, level: "Advanced", tags: ["Telecom Bill 2023"], color: "text-[#74AA78]", bg: "bg-[#74AA78]" },
-                            { text: "High-Speed Rail Network", progress: 45, level: "In Progress", tags: ["Infra Act '21", "Budget Allocation '22"], color: "text-[#00507A]", bg: "bg-[#00507A]" },
-                            { text: "Universal Basic Income Pilot", progress: 10, level: "Stalled", tags: ["No Active Legislation"], color: "text-[#D34D4A]", bg: "bg-[#D34D4A]" },
-                        ].map((item, idx) => (
-                            <div key={idx} className="group flex items-center gap-6 p-4 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-all">
-                                {/* Radial Progress */}
-                                <div
-                                    className={`radial-progress ${item.color} font-bold text-sm bg-white shadow-inner`}
-                                    style={{ "--value": item.progress, "--size": "3.5rem", "--thickness": "4px" }}
-                                    role="progressbar"
-                                >
-                                    {item.progress}%
-                                </div>
+                    <div className="space-y-6">
+                        {loadingPriority ? (
+                            <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#143B5A]" /></div>
+                        ) : (
+                            priorityItems.map((item) => {
+                                const styles = getLevelStyles(item.level);
+                                return (
+                                    <div key={item.id} className="group flex items-center gap-6 p-2 rounded-2xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all cursor-pointer">
 
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-start">
-                                        <h3 className="font-bold text-gray-800 text-lg group-hover:text-[#00507A] transition-colors">{item.text}</h3>
-                                        <span className={`text-xs px-3 py-1 rounded-full text-white font-medium ${item.bg} shadow-sm`}>
-                      {item.level}
-                    </span>
+                                        {/* Radial Progress */}
+                                        <div
+                                            className={`radial-progress ${styles.color} font-bold text-sm bg-white shadow-inner flex-shrink-0`}
+                                            style={{ "--value": item.progress, "--size": "4rem", "--thickness": "4px" }}
+                                            role="progressbar"
+                                        >
+                                            {item.progress}%
+                                        </div>
+
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 sm:gap-0">
+                                                <h3 className="font-bold text-[#202E39] text-lg group-hover:text-[#143B5A] transition-colors truncate pr-4">
+                                                    {item.title}
+                                                </h3>
+                                                <span className={`text-[11px] px-3 py-1 rounded-full text-white font-bold ${styles.bg} shadow-sm shrink-0 w-max`}>
+                          {item.level}
+                        </span>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2 mt-2 w-full">
+                                                {item.tags.map((tag, i) => (
+                                                    <span key={i} className="text-[11px] bg-white text-slate-500 font-semibold px-2 py-1 rounded-md border border-slate-200 shadow-sm group-hover:border-[#966B9D]/30 transition-colors">
+                                        {tag}
+                                    </span>
+                                                ))}
+
+                                                {/* NEW: Clickable Evidence Link */}
+                                                {item.evidence_link && item.evidence_link !== "None" && (
+                                                    <a
+                                                        href={item.evidence_link}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="ml-auto text-[10px] sm:text-[11px] bg-[#143B5A]/5 text-[#143B5A] hover:bg-[#143B5A]/10 hover:text-[#00D4FF] font-bold px-3 py-1.5 rounded-md border border-[#143B5A]/10 flex items-center gap-1.5 transition-all"
+                                                        onClick={(e) => e.stopPropagation()} // Prevents clicking the row if you add row clicks later
+                                                    >
+                                                        View Evidence <ExternalLink size={12} strokeWidth={2.5} />
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="flex gap-2 mt-3">
-                                        {item.tags.map(tag => (
-                                            <span key={tag} className="text-xs bg-white text-gray-500 font-medium px-2 py-1 rounded border border-gray-200 shadow-sm group-hover:border-[#966B9D]/30 transition-colors">
-                        {tag}
-                      </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+                                );
+                            })
+                        )}
                     </div>
                 </div>
 

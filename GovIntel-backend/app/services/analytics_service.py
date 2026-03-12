@@ -106,3 +106,49 @@ class AnalyticsService:
         except Exception as e:
             print(f"Backend AI Error: {str(e)}") 
             return f"### ⚠️ AI Generation Failed\n**Error Details:** {str(e)}"
+
+    def fetch_high_priority_for_ui(self):
+        """Formats the mixed priority list for the React radial progress component."""
+        docs = self.repo.get_mixed_priority_implementations()
+        formatted = []
+        
+        for doc in docs:
+            audit = doc.get("audit_report", {})
+            status = audit.get("status", "Unknown")
+            evidence_link = audit.get("evidence_link", "")
+            
+            # Map the AI status to a percentage and UI Level
+            if status == "Fulfilled":
+                progress = 85
+                level = "Advanced"
+            elif status == "Partially Fulfilled":
+                progress = 65
+                level = "Advanced"
+            elif status == "In Progress":
+                progress = 45
+                level = "In Progress"
+            else:
+                progress = 10
+                level = "Stalled"
+            
+            # Extract actual event text from the AI timeline
+            timeline = audit.get("timeline", [])
+            tags = []
+            for item in timeline[-2:]: # Grab the 2 most recent timeline events
+                year = item.get("year", "")
+                event_snippet = str(item.get("event", ""))[:25] + "..." if item.get("event") else "Status Updated"
+                tags.append(f"{year}: {event_snippet}" if year else event_snippet)
+                
+            if not tags:
+                tags = ["No Active Legislation"] if status == "Stalled" else ["Pending Review"]
+            
+            formatted.append({
+                "id": str(doc["_id"]),
+                "title": doc.get("title", "Unknown Initiative"),
+                "progress": progress,
+                "level": level,
+                "tags": tags,
+                "evidence_link": evidence_link
+            })
+            
+        return formatted

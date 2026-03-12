@@ -40,3 +40,14 @@ def get_dashboard_briefing():
         }), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+    
+
+@api_blueprint.route('/dashboard/high-priority', methods=['GET'])
+def get_high_priority():
+    """Endpoint powering the radial progress list on the Dashboard."""
+    try:
+        data = analytics_service.fetch_high_priority_for_ui()
+        return jsonify({"success": True, "data": data}), 200
+    except Exception as e:
+        print(f"Error fetching high priority: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
