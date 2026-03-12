@@ -1,29 +1,30 @@
+// src/components/layout/Header.jsx
 import React from 'react';
-import { Search, Bell } from 'lucide-react';
+import { Search } from 'lucide-react';
 
-const Header = () => {
+export default function Header() {
   return (
-    <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-10 sticky top-0 z-20">
+    <header className="h-20 bg-[#FFFFFF] border-b border-gray-200 flex items-center justify-between px-8 flex-shrink-0 z-10">
       <div className="flex-1 max-w-2xl relative">
-        <Search className="w-5 h-5 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
-        <input 
-          type="text" 
-          placeholder="Search manifestos, bills, or representatives..." 
-          className="w-full pl-12 pr-4 py-3 rounded-xl border-none bg-gray-50 focus:bg-white focus:ring-2 focus:ring-[#00507A]/20 transition-all outline-none text-sm font-medium text-[#00507A]"
+        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+          <Search size={20} className="text-[#00507A]" />
+        </div>
+        <input
+          type="text"
+          placeholder="Intelligent search: Try 'What is the status of the Digital Data Protection Bill?'"
+          className="w-full pl-12 pr-4 py-3 rounded-xl border border-[#00507A]/20 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#966B9D]/50 focus:border-[#00507A] transition-all text-gray-800 placeholder-gray-400"
         />
       </div>
-      
-      <div className="flex items-center gap-6">
-        <button className="relative text-gray-400 hover:text-[#00507A] transition-colors">
-          <Bell className="w-6 h-6" />
-          <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-[#D34D4A] rounded-full border-2 border-white"></span>
-        </button>
-        <div className="w-10 h-10 rounded-full bg-[#966B9D] text-white flex items-center justify-center font-bold shadow-md shadow-[#966B9D]/30 cursor-pointer">
-          JD
-        </div>
+
+      <div className="ml-6 flex items-center gap-4">
+        <span className="text-sm font-medium text-gray-500">Term:</span>
+        <select className="select select-bordered border-[#00507A]/30 text-[#00507A] bg-white hover:border-[#00507A] focus:outline-none h-10 min-h-10">
+          <option>All Terms</option>
+          <option>2014</option>
+          <option>2019</option>
+          <option>2024</option>
+        </select>
       </div>
     </header>
   );
-};
-
-export default Header;
+}
