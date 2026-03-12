@@ -18,7 +18,6 @@ export default function Dashboard() {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const { selectedTerm } = useOutletContext();
-    console.log("📡 DASHBOARD DETECTED TERM:", selectedTerm);
 
     useEffect(() => {
         const fetchStats = async () => {
