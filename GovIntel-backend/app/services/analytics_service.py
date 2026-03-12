@@ -162,24 +162,26 @@ class AnalyticsService:
 
     def fetch_intelligence_feed(self, term=None):
         """Creates a diversified feed filtered by term."""
+        # This now receives docs with 'status' and 'timeline' keys at the top level
         commitments = self.repo.get_all_audited(limit=20, term=term)
         feed = []
         
         for doc in commitments:
-            audit = doc.get("audit_report", {})
-            timeline = audit.get("timeline", [])
-            status = audit.get("status", "Updated")
+            # Access the fields added by $addFields directly
+            timeline = doc.get("timeline", [])
+            status = doc.get("status", "Updated")
             
             if timeline:
                 latest_event = timeline[-1] 
                 feed.append({
                     "id": str(doc['_id']),
                     "year": latest_event.get("year", "2024"),
-                    "title": doc.get("title"),
-                    "description": latest_event.get("event"),
+                    "title": doc.get("title", "Governance Update"),
+                    "description": latest_event.get("event", "System status updated."),
                     "status": status,
                     "urgency": "high" if status == "Stalled" else "normal" 
                 })
         
-        feed.sort(key=lambda x: x['year'], reverse=True)
+        # Sort by year descending to show the most recent events first
+        feed.sort(key=lambda x: str(x['year']), reverse=True)
         return feed

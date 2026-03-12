@@ -56,8 +56,6 @@ class CommitmentRepository:
         """Fetches audited commitments, joined with manifestos, heavily optimized."""
         pipeline = [
             {"$match": {"is_audited": True}},
-            
-            # Join with Manifestos to get the Election Year
             {
                 "$lookup": {
                     "from": "manifestos",
@@ -66,28 +64,23 @@ class CommitmentRepository:
                     "as": "manifesto_data"
                 }
             },
-            
-            # Unwind the array created by lookup
             {"$unwind": {"path": "$manifesto_data", "preserveNullAndEmptyArrays": True}}
         ]
 
-        # Apply Term Filter if needed
         if term and term != "All Terms":
             try:
                 pipeline.append({"$match": {"manifesto_data.election_year": int(term)}})
             except ValueError:
                 pass
 
-        # HIGHLY EFFICIENT PROJECTION: Only grab exactly what the UI needs
+        # FIX: Use $addFields to keep the document intact while flattening UI keys
         pipeline.append({
-            "$project": {
-                "_id": 1,
-                "title": 1,
-                "sector": {"$ifNull": ["$sector", "General"]}, 
+            "$addFields": {
                 "status": "$audit_report.status",
                 "summary": "$audit_report.summary",
                 "evidence_link": "$audit_report.evidence_link",
-                "year": "$manifesto_data.election_year"
+                "year": "$manifesto_data.election_year",
+                "timeline": "$audit_report.timeline" # CRITICAL: Add this for the feed
             }
         })
 
