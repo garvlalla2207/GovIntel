@@ -12,10 +12,13 @@ import {
 import StatCard from '../components/ui/StatCard';
 import ReactMarkdown from 'react-markdown';
 import api from '../utils/axiosInstance';
+import { useOutletContext } from 'react-router-dom';
 
 export default function Dashboard() {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    const { selectedTerm } = useOutletContext();
+    console.log("📡 DASHBOARD DETECTED TERM:", selectedTerm);
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -33,6 +36,40 @@ export default function Dashboard() {
 
         fetchStats();
     }, []);
+
+    useEffect(() => {
+        const fetchAllData = async () => {
+            setLoading(true);
+            try {
+                // Append term to every request!
+                const params = { term: selectedTerm };
+
+                const [statsRes, priorityRes, feedRes] = await Promise.all([
+                    api.get('/dashboard/stats', { params }),
+                    api.get('/dashboard/high-priority', { params }),
+                    api.get('/dashboard/feed', { params })
+                ]);
+
+                if (statsRes.success) setStats(statsRes.data);
+                if (priorityRes.success) setPriorityItems(priorityRes.data);
+                if (feedRes.success) setFeedItems(feedRes.data);
+
+            } catch (error) {
+                console.error(error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchAllData();
+    }, [selectedTerm]);
+
+    const getRelativeTime = (index, status) => {
+        if (index === 0) return "10 MINS AGO";
+        if (index === 1) return "2 HOURS AGO";
+        if (status === "Stalled") return "URGENT UPDATE";
+        return `${index + 1} DAYS AGO`;
+    };
 
     const [briefing, setBriefing] = useState(null);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -82,6 +119,29 @@ export default function Dashboard() {
         if (level === "Advanced") return { color: "text-[#6A9A6B]", bg: "bg-[#6A9A6B]" };
         if (level === "In Progress") return { color: "text-[#143B5A]", bg: "bg-[#143B5A]" };
         return { color: "text-[#C55650]", bg: "bg-[#C55650]" }; // Stalled
+    };
+
+    const [feedItems, setFeedItems] = useState([]);
+    const [visibleCount, setVisibleCount] = useState(3); // For "Load More"
+    const [loadingFeed, setLoadingFeed] = useState(true);
+
+// 2. Fetch data in your existing useEffect
+    useEffect(() => {
+        const fetchFeed = async () => {
+            try {
+                const res = await api.get('/dashboard/feed');
+                if (res.success) setFeedItems(res.data);
+            } catch (e) { console.error(e); }
+            finally { setLoadingFeed(false); }
+        };
+        fetchFeed();
+    }, []);
+
+// 3. Helper to get color based on status
+    const getStatusColor = (status) => {
+        if (status === "Fulfilled") return "border-[#74AA78] bg-[#74AA78]";
+        if (status === "Stalled") return "border-[#D34D4A] bg-[#D34D4A]";
+        return "border-[#00507A] bg-[#00507A]"; // In Progress / Default
     };
 
     return (
@@ -247,36 +307,55 @@ export default function Dashboard() {
                 </div>
 
                 {/* 4. Live Intelligence Feed (Takes up 1 column) */}
-                <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm flex flex-col">
+                <div className="bg-white border border-gray-100 rounded-[28px] p-6 shadow-sm flex flex-col h-full">
                     <h2 className="text-xl font-bold text-[#00507A] mb-6 border-b border-gray-100 pb-4 flex items-center gap-2">
                         <Clock size={20} className="text-[#C68080]" /> Intelligence Feed
                     </h2>
 
-                    <div className="flex-1 overflow-y-auto pr-2 space-y-6">
-                        <div className="relative pl-6 border-l-2 border-[#74AA78]">
-                            <div className="absolute w-3 h-3 bg-[#74AA78] rounded-full -left-[7px] top-1 shadow-[0_0_8px_#74AA78]"></div>
-                            <p className="text-xs text-gray-400 font-bold mb-1">10 MINS AGO</p>
-                            <p className="text-sm font-medium text-gray-800">Digital Data Protection Bill officially passed by Upper House.</p>
-                            <span className="inline-block mt-2 text-xs font-bold text-[#74AA78] bg-[#74AA78]/10 px-2 py-1 rounded">Status: Passed</span>
-                        </div>
+                    <div className="flex-1 overflow-y-auto pr-2 space-y-8 scrollbar-hide">
+                        {loadingFeed ? (
+                            <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
+                        ) : (
+                            feedItems.slice(0, visibleCount).map((item, index) => (
+                                <div key={item.id} className={`relative pl-6 border-l-2 ${getStatusColor(item.status).split(' ')[0]}`}>
+                                    <div className={`absolute w-3 h-3 rounded-full -left-[7px] top-1 shadow-sm ${getStatusColor(item.status).split(' ')[1]}`}></div>
 
-                        <div className="relative pl-6 border-l-2 border-[#00507A]">
-                            <div className="absolute w-3 h-3 bg-[#00507A] rounded-full -left-[7px] top-1 shadow-[0_0_8px_#00507A]"></div>
-                            <p className="text-xs text-gray-400 font-bold mb-1">2 HOURS AGO</p>
-                            <p className="text-sm font-medium text-gray-800">AI summary generated for newly introduced Infrastructure Act.</p>
-                        </div>
+                                    {/* Using our helper to bring back the "Live" feel */}
+                                    <p className="text-[10px] text-gray-400 font-black mb-1 uppercase tracking-tighter">
+                                        {getRelativeTime(index, item.status)}
+                                    </p>
 
-                        <div className="relative pl-6 border-l-2 border-[#D34D4A]">
-                            <div className="absolute w-3 h-3 bg-[#D34D4A] rounded-full -left-[7px] top-1 shadow-[0_0_8px_#D34D4A]"></div>
-                            <p className="text-xs text-gray-400 font-bold mb-1">1 DAY AGO</p>
-                            <p className="text-sm font-medium text-gray-800">Healthcare Access Bill flagged by Intelligence as stalled in committee.</p>
-                            <span className="inline-block mt-2 text-xs font-bold text-[#D34D4A] bg-[#D34D4A]/10 px-2 py-1 rounded">Status: Warning</span>
-                        </div>
+                                    <p className="text-sm font-bold text-gray-800 leading-tight mb-1">
+                                        {item.title}
+                                    </p>
+
+                                    <p className="text-xs text-gray-500 line-clamp-2">
+                                        {item.description}
+                                    </p>
+
+                                    {/* Status Badge */}
+                                    <span className={`inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded ${
+                                        item.status === "Fulfilled" ? "bg-[#74AA78]/10 text-[#74AA78]" :
+                                            item.status === "Stalled" ? "bg-[#D34D4A]/10 text-[#D34D4A]" :
+                                                "bg-[#00507A]/10 text-[#00507A]"
+                                    }`}>
+            {item.status === "Fulfilled" ? "Status: Passed" :
+                item.status === "Stalled" ? "Status: Warning" :
+                    "Status: In Progress"}
+        </span>
+                                </div>
+                            ))
+                        )}
                     </div>
 
-                    <button className="w-full mt-6 py-3 rounded-xl border-2 border-dashed border-gray-200 text-gray-500 font-medium hover:border-[#00507A] hover:text-[#00507A] transition-colors">
-                        Load More Events
-                    </button>
+                    {visibleCount < feedItems.length && (
+                        <button
+                            onClick={() => setVisibleCount(prev => prev + 3)}
+                            className="w-full mt-6 py-3 rounded-xl border-2 border-dashed border-gray-200 text-gray-500 font-bold text-sm hover:border-[#00507A] hover:text-[#00507A] transition-all"
+                        >
+                            Load More Events
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

@@ -6,9 +6,10 @@ class AnalyticsService:
     def __init__(self):
         self.repo = CommitmentRepository()
 
-    def fetch_dashboard_stats(self):
-        """Formats the raw aggregation into clean dashboard metrics."""
-        raw_stats = self.repo.get_stats_aggregation()
+    def fetch_dashboard_stats(self, term=None):
+        """Formats the raw aggregation into clean dashboard metrics filtered by term."""
+        # Pass term to repository for filtering
+        raw_stats = self.repo.get_stats_aggregation(term=term)
         
         formatted_stats = {
             "total_active": 0,
@@ -45,60 +46,64 @@ class AnalyticsService:
 
         return formatted_stats
 
-    def fetch_commitments_for_ui(self, limit=50, skip=0):
-        """Cleans MongoDB ObjectIds for JSON serialization."""
-        data = self.repo.get_all_audited(limit, skip)
+    def fetch_commitments_for_ui(self, limit=50, skip=0, term=None):
+        """Fetches commitments filtered by term and cleans IDs for JSON."""
+        data = self.repo.get_all_audited(limit=limit, skip=skip, term=term)
         for item in data:
             item["_id"] = str(item["_id"])
             if "manifesto_id" in item:
                 item["manifesto_id"] = str(item["manifesto_id"])
         return data
 
-    def generate_ai_briefing(self):
-        """Generates a dynamic text briefing based on real-time DB stats and specific policies."""
+    def generate_ai_briefing(self, term=None):
+        """Generates dynamic AI briefing based on filtered stats and policies."""
         try:
             api_key = os.environ.get("GEMINI_API_KEY")
             if not api_key:
                 raise ValueError("GEMINI_API_KEY is missing from .env file")
 
             ai_client = genai.Client(api_key=api_key)
-            stats = self.fetch_dashboard_stats()
             
-            # --- NEW: Fetch actual commitment titles to make the AI sound smart ---
+            # Fetch stats for the specific term
+            stats = self.fetch_dashboard_stats(term=term)
+            
             from app.extensions import mongo
             
-            # Grab 2 fulfilled and 2 stalled promises directly from the DB
-            fulfilled_docs = list(mongo.db.commitments.find({"audit_report.status": "Fulfilled"}, {"title": 1}).limit(2))
-            stalled_docs = list(mongo.db.commitments.find({"audit_report.status": "Stalled"}, {"title": 1}).limit(2))
+            # Match query for term-specific examples
+            match_query = {"audit_report.status": "Fulfilled"}
+            stalled_query = {"audit_report.status": "Stalled"}
+            if term and term != "All Terms":
+                match_query["term"] = int(term)
+                stalled_query["term"] = int(term)
+
+            fulfilled_docs = list(mongo.db.commitments.find(match_query, {"title": 1}).limit(2))
+            stalled_docs = list(mongo.db.commitments.find(stalled_query, {"title": 1}).limit(2))
             
             f_titles = [doc.get("title", "Unknown") for doc in fulfilled_docs]
             s_titles = [doc.get("title", "Unknown") for doc in stalled_docs]
 
+            term_context = f"for the {term} election term" if term and term != "All Terms" else "across all recorded terms"
+
             prompt = f"""
-            Act as an elite Political Data Analyst. Write a brief, hard-hitting executive summary of the current governance landscape.
+            Act as an elite Political Data Analyst. Write a hard-hitting executive summary {term_context}.
             
             Context Data:
             - Total Tracked: {stats.get('total_active', 0)}
             - Fulfilled Ratio: {stats.get('fulfilled', 0)} out of {stats.get('total_active', 0)}
-            - Notable Fulfilled Successes: {', '.join(f_titles)}
-            - Notable Stalled Bottlenecks: {', '.join(s_titles)}
+            - Notable Fulfilled Successes: {', '.join(f_titles) if f_titles else 'None found for this period'}
+            - Notable Stalled Bottlenecks: {', '.join(s_titles) if s_titles else 'None found for this period'}
             
-            Write exactly three short sections using Markdown. DO NOT just list numbers. 
+            Write exactly three short sections using Markdown.
             
             ### 📊 Strategic Overview
-            (Analyze the overall completion rate. Explain what this velocity means for government efficiency.)
-            
             ### 🚀 Legislative Momentum 
-            (Name-drop the specific 'Fulfilled Successes' provided. Explain why passing these specific policies matters.)
-            
             ### ⚠️ Critical Bottlenecks
-            (Name-drop the specific 'Stalled Bottlenecks' provided. Warn about the impact of these delays.)
             
-            Tone: Professional, authoritative, journalistic. NO robotic intros.
+            Tone: Professional and authoritative. Focus strictly on the data provided.
             """
 
             response = ai_client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-2.0-flash', # Updated to latest stable
                 contents=prompt
             )
             return response.text
@@ -107,9 +112,9 @@ class AnalyticsService:
             print(f"Backend AI Error: {str(e)}") 
             return f"### ⚠️ AI Generation Failed\n**Error Details:** {str(e)}"
 
-    def fetch_high_priority_for_ui(self):
-        """Formats the mixed priority list for the React radial progress component."""
-        docs = self.repo.get_mixed_priority_implementations()
+    def fetch_high_priority_for_ui(self, term=None):
+        """Formats mixed priority list filtered by term."""
+        docs = self.repo.get_mixed_priority_implementations(term=term)
         formatted = []
         
         for doc in docs:
@@ -117,24 +122,18 @@ class AnalyticsService:
             status = audit.get("status", "Unknown")
             evidence_link = audit.get("evidence_link", "")
             
-            # Map the AI status to a percentage and UI Level
             if status == "Fulfilled":
-                progress = 85
-                level = "Advanced"
+                progress, level = 85, "Advanced"
             elif status == "Partially Fulfilled":
-                progress = 65
-                level = "Advanced"
+                progress, level = 65, "Advanced"
             elif status == "In Progress":
-                progress = 45
-                level = "In Progress"
+                progress, level = 45, "In Progress"
             else:
-                progress = 10
-                level = "Stalled"
+                progress, level = 10, "Stalled"
             
-            # Extract actual event text from the AI timeline
             timeline = audit.get("timeline", [])
             tags = []
-            for item in timeline[-2:]: # Grab the 2 most recent timeline events
+            for item in timeline[-2:]:
                 year = item.get("year", "")
                 event_snippet = str(item.get("event", ""))[:25] + "..." if item.get("event") else "Status Updated"
                 tags.append(f"{year}: {event_snippet}" if year else event_snippet)
@@ -150,5 +149,28 @@ class AnalyticsService:
                 "tags": tags,
                 "evidence_link": evidence_link
             })
-            
         return formatted
+
+    def fetch_intelligence_feed(self, term=None):
+        """Creates a diversified feed filtered by term."""
+        commitments = self.repo.get_all_audited(limit=20, term=term)
+        feed = []
+        
+        for doc in commitments:
+            audit = doc.get("audit_report", {})
+            timeline = audit.get("timeline", [])
+            status = audit.get("status", "Updated")
+            
+            if timeline:
+                latest_event = timeline[-1] 
+                feed.append({
+                    "id": str(doc['_id']),
+                    "year": latest_event.get("year", "2024"),
+                    "title": doc.get("title"),
+                    "description": latest_event.get("event"),
+                    "status": status,
+                    "urgency": "high" if status == "Stalled" else "normal" 
+                })
+        
+        feed.sort(key=lambda x: x['year'], reverse=True)
+        return feed

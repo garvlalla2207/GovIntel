@@ -1,37 +1,74 @@
 from app.extensions import mongo
+from bson import ObjectId
 
 class CommitmentRepository:
-    def get_all_audited(self, limit=50, skip=0):
-        """Fetches a paginated list of audited commitments."""
-        cursor = mongo.db.commitments.find({"is_audited": True}).skip(skip).limit(limit)
-        return list(cursor)
-
-    def get_stats_aggregation(self):
-        """Runs the MongoDB aggregation for the dashboard pie charts."""
+    def get_stats_aggregation(self, term=None):
+        """Joins with manifestos to filter stats by election_year."""
         pipeline = [
             {"$match": {"is_audited": True}},
-            {"$group": {"_id": "$audit_report.status", "count": {"$sum": 1}}} # Make sure it matches your DB schema
+            {
+                "$lookup": {
+                    "from": "manifestos",
+                    "localField": "manifesto_id",
+                    "foreignField": "_id",
+                    "as": "manifesto"
+                }
+            },
+            {"$unwind": "$manifesto"}
         ]
+
+        # Apply the term filter if a specific year is selected
+        if term and term != "All Terms":
+            pipeline.append({"$match": {"manifesto.election_year": int(term)}})
+
+        # Group by the status
+        pipeline.append({"$group": {"_id": "$audit_report.status", "count": {"$sum": 1}}})
+        
         return list(mongo.db.commitments.aggregate(pipeline))
 
-    def get_mixed_priority_implementations(self):
-        """Fetches 3 commitments with different statuses for the dashboard highlight."""
-        # FIX: Removed 'self.' from mongo.db
-        advanced = mongo.db.commitments.find_one({"is_audited": True, "audit_report.status": "Fulfilled"})
-        in_progress = mongo.db.commitments.find_one({"is_audited": True, "audit_report.status": "In Progress"})
-        stalled = mongo.db.commitments.find_one({"is_audited": True, "audit_report.status": "Stalled"})
+    def get_mixed_priority_implementations(self, term=None):
+        """Joins with manifestos to fetch filtered priority items."""
+        pipeline = [
+            {"$match": {"is_audited": True}},
+            {
+                "$lookup": {
+                    "from": "manifestos",
+                    "localField": "manifesto_id",
+                    "foreignField": "_id",
+                    "as": "manifesto"
+                }
+            },
+            {"$unwind": "$manifesto"}
+        ]
+
+        if term and term != "All Terms":
+            pipeline.append({"$match": {"manifesto.election_year": int(term)}})
+
+        # Get a sample of the data
+        pipeline.append({"$limit": 10})
+        results = list(mongo.db.commitments.aggregate(pipeline))
         
-        results = [doc for doc in [advanced, in_progress, stalled] if doc]
-        
-        # If we couldn't find exactly one of each, pad the list to ensure we have 3 items
-        if len(results) < 3:
-            needed = 3 - len(results)
-            # Fetch a few extra to fill the gaps, making sure we don't duplicate
-            existing_ids = [doc["_id"] for doc in results]
-            extras = mongo.db.commitments.find({
-                "is_audited": True, 
-                "_id": {"$nin": existing_ids}
-            }).limit(needed)
-            results.extend(list(extras))
-            
+        # Simple Python logic to ensure variety in the 3 returned items
+        if not results: return []
         return results[:3]
+
+    def get_all_audited(self, limit=20, term=None):
+        """Fetches audited commitments joined with their election year."""
+        pipeline = [
+            {"$match": {"is_audited": True}},
+            {
+                "$lookup": {
+                    "from": "manifestos",
+                    "localField": "manifesto_id",
+                    "foreignField": "_id",
+                    "as": "manifesto"
+                }
+            },
+            {"$unwind": "$manifesto"}
+        ]
+
+        if term and term != "All Terms":
+            pipeline.append({"$match": {"manifesto.election_year": int(term)}})
+
+        pipeline.append({"$limit": limit})
+        return list(mongo.db.commitments.aggregate(pipeline))
