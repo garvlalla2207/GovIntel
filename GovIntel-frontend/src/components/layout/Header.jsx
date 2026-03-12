@@ -34,12 +34,6 @@ export default function Header({ selectedTerm, setSelectedTerm }) {
                             <Zap size={10} className="text-amber-400" /> 142ms
                         </span>
                     </div>
-                    <div className="flex flex-col">
-                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Active Nodes</span>
-                        <span className="text-xs font-bold text-[#00507A] flex items-center gap-1">
-                            <Activity size={10} className="text-[#966B9D]" /> 12 Clusters
-                        </span>
-                    </div>
                 </div>
             </div>
 
