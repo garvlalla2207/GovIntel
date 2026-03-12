@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from app.services.analytics_service import AnalyticsService
+from app.repositories.legislation_repo import LegislationRepository
 
 api_blueprint = Blueprint('api', __name__, url_prefix='/api/v1')
 analytics_service = AnalyticsService()
@@ -63,3 +64,22 @@ def get_intelligence_feed():
         return jsonify({"success": True, "data": feed}), 200
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+    
+
+@api_blueprint.route('/legislation', methods=['GET'])
+def get_legislation():
+    """Unfiltered endpoint to show all 100+ legislative documents."""
+    try:
+        # We ignore 'term' entirely here to ensure 'all' are shown
+        bills = LegislationRepository.get_all_bills()
+        
+        for bill in bills:
+            bill['_id'] = str(bill['_id'])
+        
+        return jsonify({
+            "status": "success",
+            "count": len(bills),
+            "data": bills
+        }), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
