@@ -30,9 +30,12 @@ Our solution architecture is broken down into three comprehensive phases:
 * **Dynamic Live Scraping:** The system automatically polls government RSS feeds (e.g., Press Information Bureau) to scrape the latest national policy announcements in real-time.
 * **AI Semantic Structuring:** Using Gemini 1.5 Pro and strict Pydantic schemas, unstructured text is forced into standardized, predictable JSON objects (`Policy`, `Manifesto`, `GovernmentAnnouncement`, `ParliamentaryRecord`).
 
-### Phase 2: Cross-Referencing & Analytics (The Engine)
+### Phase 2: The Agentic Research Loop (The Auditor) — *Important Layer*
 
-* Once the data is standardized, GovIntel maps the connections. The system is designed to take a promise from a historical manifesto and semantically link it to a recent government press release, creating a verifiable, automated timeline of policy execution.
+* **Autonomous Research Agents:** We deployed a fleet of **Agentic AI Researchers** that don't just store data; they actively investigate it. Each manifesto promise is assigned to an agent that uses the **Gemini Google Search Tool** to cross-reference it with live web data from 2014–2026.
+* **Fulfillment Verification:** The agent autonomously searches for Parliamentary records, PIB updates, and budget allocations to assign an objective status: **'Fulfilled', 'Partially Fulfilled', 'In Progress', or 'Stalled'.**
+* **Evidence-Backed Accountability:** Every audit report includes a direct `evidence_link` and a structured `timeline`, ensuring that accountability isn't just an AI's opinion, but a verifiable fact.
+* **Self-Healing Data Pipeline:** The agent logic is built with robust error handling and regex-based cleaning to autonomously fix common AI formatting errors (like trailing commas or escape sequences) on the fly, ensuring 100% data integrity.
 
 ### Phase 3: Public Transparency Portal (The Interface)
 
@@ -43,11 +46,12 @@ Our solution architecture is broken down into three comprehensive phases:
 
 ## ⚙️ Architecture & Tech Stack
 
-### Data Pipeline & AI Backend
+### Data Pipeline & Agentic AI Layer
 
 * **Language:** Python 3.9+
-* **AI Engine:** Google Gemini 2.5 Flash (Structured JSON Outputs)
-* **Data Modeling:** Pydantic
+* **AI Engine:** Google Gemini 2.0 & 2.5 Flash (Paid Tier for high-parallelization)
+* **Search Integration:** Google Search Tool (Native Gemini Tooling)
+* **Concurrency:** Python `ThreadPoolExecutor` (Processing 1,400+ commitments in minutes)
 * **Extraction:** PyPDF2 (Static PDFs), BeautifulSoup4 & XML Parsing (Dynamic Web/RSS)
 
 ### Full-Stack Web Platform
@@ -57,3 +61,4 @@ Our solution architecture is broken down into three comprehensive phases:
 * **Database:** MongoDB (Optimized for storing our AI-generated JSON documents)
 
 ---
+
