@@ -46,14 +46,23 @@ class AnalyticsService:
 
         return formatted_stats
 
-    def fetch_commitments_for_ui(self, limit=50, skip=0, term=None):
-        """Fetches commitments filtered by term and cleans IDs for JSON."""
+    def fetch_commitments_for_ui(self, limit=100, skip=0, term=None):
+        """Prepares the highly optimized MongoDB data for React."""
         data = self.repo.get_all_audited(limit=limit, skip=skip, term=term)
+        
+        formatted_data = []
         for item in data:
-            item["_id"] = str(item["_id"])
-            if "manifesto_id" in item:
-                item["manifesto_id"] = str(item["manifesto_id"])
-        return data
+            formatted_data.append({
+                "id": str(item.get("_id")),
+                "title": item.get("title", "Unknown Commitment"),
+                "sector": item.get("sector", "General"),
+                "status": item.get("status", "In Progress"),
+                "summary": item.get("summary", "No analysis available."),
+                "evidence_link": item.get("evidence_link", ""),
+                "year": item.get("year", "Unknown")
+            })
+            
+        return formatted_data
 
     def generate_ai_briefing(self, term=None):
         """Generates dynamic AI briefing based on filtered stats and policies."""

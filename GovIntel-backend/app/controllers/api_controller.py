@@ -17,10 +17,10 @@ def get_dashboard_stats():
 
 @api_blueprint.route('/commitments', methods=['GET'])
 def get_commitments():
-    """Endpoint powering the Manifesto Tracker and Legislative Explorer."""
+    """Endpoint powering the Manifesto Tracker."""
     try:
         term = request.args.get('term', 'All Terms')
-        limit = int(request.args.get('limit', 50))
+        limit = int(request.args.get('limit', 100))
         skip = int(request.args.get('skip', 0))
         
         commitments = analytics_service.fetch_commitments_for_ui(limit=limit, skip=skip, term=term)

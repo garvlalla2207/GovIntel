@@ -52,23 +52,46 @@ class CommitmentRepository:
         if not results: return []
         return results[:3]
 
-    def get_all_audited(self, limit=20, term=None):
-        """Fetches audited commitments joined with their election year."""
+    def get_all_audited(self, limit=100, skip=0, term=None):
+        """Fetches audited commitments, joined with manifestos, heavily optimized."""
         pipeline = [
             {"$match": {"is_audited": True}},
+            
+            # Join with Manifestos to get the Election Year
             {
                 "$lookup": {
                     "from": "manifestos",
                     "localField": "manifesto_id",
                     "foreignField": "_id",
-                    "as": "manifesto"
+                    "as": "manifesto_data"
                 }
             },
-            {"$unwind": "$manifesto"}
+            
+            # Unwind the array created by lookup
+            {"$unwind": {"path": "$manifesto_data", "preserveNullAndEmptyArrays": True}}
         ]
 
+        # Apply Term Filter if needed
         if term and term != "All Terms":
-            pipeline.append({"$match": {"manifesto.election_year": int(term)}})
+            try:
+                pipeline.append({"$match": {"manifesto_data.election_year": int(term)}})
+            except ValueError:
+                pass
 
+        # HIGHLY EFFICIENT PROJECTION: Only grab exactly what the UI needs
+        pipeline.append({
+            "$project": {
+                "_id": 1,
+                "title": 1,
+                "sector": {"$ifNull": ["$sector", "General"]}, 
+                "status": "$audit_report.status",
+                "summary": "$audit_report.summary",
+                "evidence_link": "$audit_report.evidence_link",
+                "year": "$manifesto_data.election_year"
+            }
+        })
+
+        pipeline.append({"$skip": skip})
         pipeline.append({"$limit": limit})
+
         return list(mongo.db.commitments.aggregate(pipeline))

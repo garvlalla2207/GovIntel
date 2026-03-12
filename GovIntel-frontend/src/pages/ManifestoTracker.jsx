@@ -1,94 +1,123 @@
-// src/pages/ManifestoTracker.jsx
-import React, { useState } from 'react';
-
-const MOCK_PROMISES = [
-  { id: 1, text: "Deploy Nationwide 5G Infrastructure", sector: "Digital", year: "2019", progress: 100, bills: ["Telecom Act 2021"] },
-  { id: 2, text: "Double Farmers' Income", sector: "Economy", year: "2014", progress: 40, bills: ["Agri-Market Bill 2020"] },
-  { id: 3, text: "Construct 100 Smart Cities", sector: "Infrastructure", year: "2014", progress: 75, bills: ["Urban Dev Act"] },
-  { id: 4, text: "Complete Tax Code Overhaul", sector: "Economy", year: "2024", progress: 0, bills: ["Pending"] },
-];
+import React, { useState, useEffect } from 'react';
+import { useOutletContext } from 'react-router-dom';
+import { Loader2, Filter, X, ExternalLink, Activity  } from 'lucide-react';
+import api from '../utils/axiosInstance';
+import CommitmentCard from '../components/ui/CommitmentCard';
 
 export default function ManifestoTracker() {
-  const [sectorFilter, setSectorFilter] = useState('All');
-  const [yearFilter, setYearFilter] = useState('All');
+    const { selectedTerm } = useOutletContext();
+    const [commitments, setCommitments] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-  return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 border border-gray-200 rounded-xl shadow-sm">
-        <h1 className="text-2xl font-bold text-[#00507A]">Manifesto Tracker</h1>
-        
-        <div className="flex gap-4">
-          <select 
-            className="select select-bordered select-sm border-gray-300 text-gray-700 bg-white"
-            value={sectorFilter}
-            onChange={(e) => setSectorFilter(e.target.value)}
-          >
-            <option value="All">All Sectors</option>
-            <option value="Infrastructure">Infrastructure</option>
-            <option value="Digital">Digital</option>
-            <option value="Economy">Economy</option>
-          </select>
-          
-          <select 
-            className="select select-bordered select-sm border-gray-300 text-gray-700 bg-white"
-            value={yearFilter}
-            onChange={(e) => setYearFilter(e.target.value)}
-          >
-            <option value="All">All Years</option>
-            <option value="2014">2014</option>
-            <option value="2019">2019</option>
-            <option value="2024">2024</option>
-          </select>
+    // Local filter for sector (doesn't hit the DB, just filters the fetched list)
+    const [sectorFilter, setSectorFilter] = useState('All');
+
+    const [selectedPromise, setSelectedPromise] = useState(null);
+
+    useEffect(() => {
+        const fetchCommitments = async () => {
+            setLoading(true);
+            try {
+                const res = await api.get('/commitments', {
+                    params: { term: selectedTerm, limit: 100 }
+                });
+                if (res.success) {
+                    setCommitments(res.data);
+                }
+            } catch (error) {
+                console.error("Failed to load commitments", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCommitments();
+    }, [selectedTerm]);
+
+    // Extract unique sectors from the data for the dropdown
+    const uniqueSectors = ["All", ...new Set(commitments.map(c => c.sector).filter(Boolean))];
+
+    // Apply local filtering
+    const filteredCommitments = commitments.filter(c =>
+        sectorFilter === 'All' ? true : c.sector === sectorFilter
+    );
+
+    return (
+        <div className="max-w-7xl mx-auto space-y-6 relative">
+            {/* ... keep your Header and Grid ... */}
+            {/* Update the map function to pass the onClick handler: */}
+
+            {!loading && filteredCommitments.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {filteredCommitments.map(promise => (
+                        <CommitmentCard
+                            key={promise._id || promise.id}
+                            promise={promise}
+                            onClick={() => setSelectedPromise(promise)} // NEW: Trigger Modal
+                        />
+                    ))}
+                </div>
+            )}
+
+            {/* NEW: The Deep Dive Modal */}
+            {selectedPromise && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#00507A]/40 backdrop-blur-sm transition-all"
+                    onClick={() => setSelectedPromise(null)} // Click background to close
+                >
+                    {/* Modal Container */}
+                    <div
+                        className="bg-white rounded-[32px] p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()} // Prevent clicks inside modal from closing it
+                    >
+                        <div className="flex justify-between items-start mb-6">
+                            <div className="flex gap-2">
+                <span className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest bg-[#966B9D]/10 text-[#966B9D] border border-[#966B9D]/20 rounded-md">
+                  {selectedPromise.sector || "General"}
+                </span>
+                                <span className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-md border 
+                  ${selectedPromise.status === 'Fulfilled' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                                    selectedPromise.status === 'Stalled' ? 'bg-red-50 text-red-600 border-red-200' :
+                                        'bg-amber-50 text-amber-600 border-amber-200'}`}>
+                  {selectedPromise.status}
+                </span>
+                            </div>
+                            <button
+                                onClick={() => setSelectedPromise(null)}
+                                className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-full transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <h2 className="text-2xl font-black text-[#00507A] mb-4 leading-tight">
+                            {selectedPromise.title}
+                        </h2>
+
+                        <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 mb-6">
+                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <Activity size={14} className="text-[#966B9D]" /> Agent Audit Summary
+                            </h4>
+                            <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-line">
+                                {selectedPromise.summary}
+                            </p>
+                        </div>
+
+                        {selectedPromise.evidence_link && selectedPromise.evidence_link !== "#" && (
+                            <div className="flex justify-end pt-4 border-t border-gray-100">
+                                <a
+                                    href={selectedPromise.evidence_link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 bg-[#00507A] hover:bg-[#003d5c] text-white px-6 py-3 rounded-xl font-bold text-sm transition-colors shadow-md hover:shadow-lg"
+                                >
+                                    Read Source Document <ExternalLink size={16} />
+                                </a>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {MOCK_PROMISES.map(promise => {
-          let ringColor = "ring-gray-100";
-          let progressColor = "[&::-webkit-progress-value]:bg-[#00507A] [&::-moz-progress-bar]:bg-[#00507A]";
-          
-          if (promise.progress === 100) {
-            ringColor = "ring-[#74AA78]/40 ring-2";
-            progressColor = "[&::-webkit-progress-value]:bg-[#74AA78] [&::-moz-progress-bar]:bg-[#74AA78]";
-          } else if (promise.progress === 0) {
-            ringColor = "ring-[#D34D4A]/40 ring-2";
-            progressColor = ""; // Will default or not show
-          }
-
-          return (
-            <div key={promise.id} className={`bg-white border border-gray-200 p-6 rounded-2xl shadow-sm ${ringColor}`}>
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex gap-2">
-                  <span className="badge bg-[#00507A]/10 text-[#00507A] border-none font-medium">{promise.sector}</span>
-                  <span className="badge bg-[#966B9D]/10 text-[#966B9D] border-none font-medium">{promise.year}</span>
-                </div>
-                <span className="text-sm font-bold text-gray-500">{promise.progress}%</span>
-              </div>
-              
-              <h3 className="text-lg font-bold text-gray-800 mb-4">{promise.text}</h3>
-              
-              <div className="space-y-2 mb-4">
-                <progress 
-                  className={`progress w-full h-2 bg-gray-100 ${progressColor}`} 
-                  value={promise.progress} 
-                  max="100"
-                ></progress>
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Linked Legislation</p>
-                <div className="flex flex-wrap gap-2">
-                  {promise.bills.map(bill => (
-                    <span key={bill} className="text-sm bg-gray-50 text-gray-700 px-3 py-1 rounded-md border border-gray-200">
-                      {bill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  );
+    );
 }
